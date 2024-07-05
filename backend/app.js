@@ -1,116 +1,121 @@
-require('dotenv').config();
+// backend/server.js
 const express = require('express');
+const http = require('http');
 const cors = require('cors');
+const { Server } = require('socket.io');
 const path = require('path');
-const { exec } = require('child_process');
 const fs = require('fs');
-const { v4: uuidv4 } = require('uuid');
+const { exec } = require('child_process');
 
 const app = express();
-const allowedOrigins = ['http://localhost:3000'];
-
-app.use(cors({
-  origin: function (origin, callback) {
-    if (allowedOrigins.indexOf(origin) !== -1 || !origin) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  methods: ['GET', 'POST'],
-  allowedHeaders: ['Content-Type']
-}));
-
-app.use(express.json());
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: '*', // Adjust as needed
+  }
+});
 
 const tempDir = path.join(__dirname, 'temp');
 if (!fs.existsSync(tempDir)) {
   fs.mkdirSync(tempDir);
 }
 
+app.use(cors());
+app.use(express.json());
+
 const languageMap = {
-  python: 'python',
-  cpp: 'g++',
-  c: 'gcc',
-  java: 'javac',
-  javascript: 'node'
+  python: {
+    compile: null,
+    run: (filePath, inputFile) => `python "${filePath}" < "${inputFile}"`
+  },
+  cpp: {
+    compile: (filePath) => `g++ "${filePath}" -o "${path.join(tempDir, 'a.out')}"`,
+    run: (filePath, inputFile) => `"${path.join(tempDir, 'a.out')}" < "${inputFile}"`
+  },
+  c: {
+    compile: (filePath) => `gcc "${filePath}" -o "${path.join(tempDir, 'a.out')}"`,
+    run: (filePath, inputFile) => `"${path.join(tempDir, 'a.out')}" < "${inputFile}"`
+  },
+  java: {
+    compile: (filePath) => `javac "${filePath}"`,
+    run: (filePath, inputFile) => `java -cp "${tempDir}" Main < "${inputFile}"`
+  },
+  javascript: {
+    compile: null,
+    run: (filePath, inputFile) => `node "${filePath}" < "${inputFile}"`
+  }
 };
 
-app.post('/compile', (req, res) => {
-  const { language, code, input } = req.body;
-  const lang = languageMap[language];
+// Socket.IO events
+io.on('connection', (socket) => {
+  console.log('A client connected');
 
-  if (!lang) {
-    return res.status(400).json({ error: 'Unsupported language' });
-  }
+  socket.on('runCode', ({ language, code, input }) => {
+    const langConfig = languageMap[language];
+    if (!langConfig) {
+      socket.emit('output', 'Unsupported language');
+      return;
+    }
 
-  const uniqueId = uuidv4();
-  let fileName;
-  let outputFileName;
-  let compileCommand;
-  let executeCommand;
+    const fileName = getFileName(language);
+    const filePath = path.join(tempDir, fileName);
+    const inputFile = path.join(tempDir, 'input.txt');
 
-  switch (language) {
-    case 'python':
-      fileName = `${uniqueId}.py`;
-      compileCommand = null;
-      executeCommand = `python "${path.join(tempDir, fileName)}"`;
-      break;
-    case 'cpp':
-      fileName = `${uniqueId}.cpp`;
-      outputFileName = `${uniqueId}.exe`;
-      compileCommand = `g++ "${path.join(tempDir, fileName)}" -o "${path.join(tempDir, outputFileName)}"`;
-      executeCommand = `"${path.join(tempDir, outputFileName)}"`;
-      break;
-    case 'c':
-      fileName = `${uniqueId}.c`;
-      outputFileName = `${uniqueId}.exe`;
-      compileCommand = `gcc "${path.join(tempDir, fileName)}" -o "${path.join(tempDir, outputFileName)}"`;
-      executeCommand = `"${path.join(tempDir, outputFileName)}"`;
-      break;
-    case 'java':
-      fileName = 'Main.java';
-      fs.writeFileSync(path.join(tempDir, fileName), code);
-      compileCommand = `javac "${path.join(tempDir, fileName)}"`;
-      executeCommand = `java -cp "${tempDir}" Main`;
-      break;
-    case 'javascript':
-      fileName = `${uniqueId}.js`;
-      compileCommand = null;
-      executeCommand = `node "${path.join(tempDir, fileName)}"`;
-      break;
-    default:
-      return res.status(400).json({ error: 'Unsupported language' });
-  }
+    fs.writeFileSync(filePath, code);
+    fs.writeFileSync(inputFile, input);
 
-  fs.writeFileSync(path.join(tempDir, fileName), code);
+    const compileCommand = langConfig.compile ? langConfig.compile(filePath) : null;
+    const executeCommand = langConfig.run(filePath, inputFile);
 
-  const command = compileCommand ? `${compileCommand} && ${executeCommand}` : executeCommand;
+    const command = compileCommand ? `${compileCommand} && ${executeCommand}` : executeCommand;
 
-  console.log('Executing command:', command); // Debugging statement
+    exec(command, (error, stdout, stderr) => {
+      cleanUpFiles(filePath, inputFile);
 
-  exec(command, (error, stdout, stderr) => {
-    fs.unlink(path.join(tempDir, fileName), (err) => {
-      if (err) console.error('Error removing temporary source file:', err);
+      if (error) {
+        console.error('Error executing code:', stderr);
+        socket.emit('output', stderr);
+      } else {
+        socket.emit('output', stdout);
+      }
     });
+  });
 
-    if (outputFileName) {
-      fs.unlink(path.join(tempDir, outputFileName), (err) => {
-        if (err) console.error('Error removing temporary output file:', err);
-      });
-    }
-
-    if (error) {
-      console.error('Error executing code:', stderr);
-      return res.status(500).json({ error: stderr });
-    }
-
-    console.log('Output:', stdout); // Debugging statement
-    res.json({ result: stdout });
+  socket.on('disconnect', () => {
+    console.log('A client disconnected');
   });
 });
 
+const getFileName = (language) => {
+  switch (language) {
+    case 'python':
+      return 'temp.py';
+    case 'cpp':
+      return 'temp.cpp';
+    case 'c':
+      return 'temp.c';
+    case 'java':
+      return 'Main.java';
+    case 'javascript':
+      return 'temp.js';
+    default:
+      return 'temp.txt';
+  }
+};
+
+const cleanUpFiles = (...files) => {
+  files.forEach(file => {
+    if (fs.existsSync(file)) {
+      fs.unlink(file, (err) => {
+        if (err) console.error('Error removing temporary file:', err);
+      });
+    } else {
+      console.error('File not found, unable to remove temporary file:', file);
+    }
+  });
+};
+
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });

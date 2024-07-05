@@ -1,5 +1,9 @@
-import React, { useState } from 'react';
+// src/App.js
+import React, { useState, useEffect } from 'react';
+import io from 'socket.io-client';
 import Editor from '@monaco-editor/react';
+
+const socket = io('http://localhost:5000'); // Change to your backend URL
 
 const languageOptions = [
   { value: 'python', label: 'Python' },
@@ -23,6 +27,17 @@ const App = () => {
   const [input, setInput] = useState('');
   const [result, setResult] = useState('');
 
+  useEffect(() => {
+    // Set up Socket.IO event listeners
+    socket.on('output', (data) => {
+      setResult((prevResult) => prevResult + data);
+    });
+
+    return () => {
+      socket.off('output');
+    };
+  }, []);
+
   const handleLanguageChange = (event) => {
     const newLanguage = event.target.value;
     setSelectedLanguage(newLanguage);
@@ -37,7 +52,7 @@ const App = () => {
     setInput(event.target.value);
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     if (!code.trim()) {
       alert('Code cannot be empty!');
       return;
@@ -48,97 +63,70 @@ const App = () => {
       return;
     }
 
-    try {
-      const backendUrl = 'http://localhost:5000';
-      const response = await fetch(`${backendUrl}/compile`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          language: selectedLanguage,
-          code: code,
-          input: input
-        })
-      });
-
-      if (!response.body) {
-        throw new Error('No response body');
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let resultData = '';
-
-      reader.read().then(function processText({ done, value }) {
-        if (done) {
-          setResult(resultData);
-          return;
-        }
-
-        resultData += decoder.decode(value, { stream: true });
-        // Process partial data if needed
-        // For example, you can update a state here if you want to show partial results
-        reader.read().then(processText);
-      });
-
-    } catch (error) {
-      console.error('Error submitting code:', error);
-      alert(`There was an error submitting the code: ${error.message}`);
-    }
+    setResult('');
+    // Emit the code and input to the server
+    socket.emit('runCode', {
+      language: selectedLanguage,
+      code: code,
+      input: input
+    });
   };
 
   return (
     <div className="container mx-auto p-4">
       <h1 className="text-2xl font-bold mb-4">Online Compiler</h1>
-      <div className="mb-4">
-        <label htmlFor="language" className="block text-sm font-medium text-gray-700">Select Language:</label>
-        <select
-          id="language"
-          value={selectedLanguage}
-          onChange={handleLanguageChange}
-          className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
-        >
-          {languageOptions.map(option => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div className="mb-4">
-        <label htmlFor="code" className="block text-sm font-medium text-gray-700">Enter Code:</label>
-        <Editor
-          height="200px"
-          defaultLanguage={selectedLanguage}
-          value={code}
-          onChange={handleCodeChange}
-          theme="vs-dark"
-          className="border border-gray-300 rounded-md"
-        />
-      </div>
-      <div className="mb-4">
-        <label htmlFor="input" className="block text-sm font-medium text-gray-700">Enter Input (if any):</label>
-        <textarea
-          id="input"
-          value={input}
-          onChange={handleInputChange}
-          rows="5"
-          className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
-        />
-      </div>
-      <button
-        onClick={handleSubmit}
-        className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
-      >
-        Submit
-      </button>
-      {result && (
-        <div className="mt-4 p-4 border rounded bg-gray-100">
-          <h2 className="text-xl font-bold">Result:</h2>
-          <pre className="whitespace-pre-wrap">{result}</pre>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <div className="mb-4">
+            <label htmlFor="language" className="block text-sm font-medium text-gray-700">Select Language:</label>
+            <select
+              id="language"
+              value={selectedLanguage}
+              onChange={handleLanguageChange}
+              className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
+            >
+              {languageOptions.map(option => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="mb-4">
+            <label htmlFor="code" className="block text-sm font-medium text-gray-700">Enter Code:</label>
+            <Editor
+              height="400px"
+              defaultLanguage={selectedLanguage}
+              value={code}
+              onChange={handleCodeChange}
+              theme="vs-dark"
+              className="border border-gray-300 rounded-md"
+            />
+          </div>
+          <button
+            onClick={handleSubmit}
+            className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+          >
+            Submit
+          </button>
         </div>
-      )}
+        <div>
+          <div className="mb-4">
+            <label htmlFor="input" className="block text-sm font-medium text-gray-700">Enter Input (if any):</label>
+            <textarea
+              id="input"
+              value={input}
+              onChange={handleInputChange}
+              rows="5"
+              className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
+            />
+          </div>
+          <div className="mt-4 p-4 border rounded bg-gray-100">
+            <h2 className="text-xl font-bold">Output:</h2>
+            <pre className="whitespace-pre-wrap">{result}</pre>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };
