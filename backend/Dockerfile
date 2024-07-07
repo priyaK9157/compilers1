@@ -1,5 +1,7 @@
-# Use the official Node.js image from Docker Hub
-FROM node:18
+# Backend Dockerfile
+
+# Use an official Node runtime as a parent image
+FROM node:14
 
 # Set the working directory
 WORKDIR /usr/src/app
@@ -13,8 +15,8 @@ RUN npm install
 # Copy the rest of the application code
 COPY . .
 
-# Expose port
-EXPOSE 3000
+# Expose the port the app runs on
+EXPOSE 5000
 
-# Start the server
+# Command to run the app
 CMD ["node", "server.js"]
