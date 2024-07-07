@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import io from 'socket.io-client';
 import Editor from '@monaco-editor/react';
 
-const socket = io('https://compiler-1.onrender.com'); 
+const socket = io(process.env.REACT_APP_BACKEND_URL); 
 
 const languageOptions = [
   { value: 'python', label: 'Python' },
