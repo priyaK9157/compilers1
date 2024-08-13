@@ -10,7 +10,7 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: '*', // Adjust as needed
+    origin: '*',
   }
 });
 
@@ -24,28 +24,32 @@ app.use(express.json());
 
 const languageMap = {
   python: {
+    boilerplate: '',
     compile: null,
     run: (filePath, inputFile) => `python "${filePath}" < "${inputFile}"`
   },
   cpp: {
+    boilerplate: `#include <bits/stdc++.h>\nusing namespace std;\n`,
     compile: (filePath) => `g++ "${filePath}" -o "${path.join(tempDir, 'a.out')}"`,
     run: (filePath, inputFile) => `"${path.join(tempDir, 'a.out')}" < "${inputFile}"`
   },
   c: {
+    boilerplate: `#include <stdio.h>\n#include <math.h>\n`,
     compile: (filePath) => `gcc "${filePath}" -o "${path.join(tempDir, 'a.out')}"`,
     run: (filePath, inputFile) => `"${path.join(tempDir, 'a.out')}" < "${inputFile}"`
   },
   java: {
+    boilerplate: '',
     compile: (filePath) => `javac "${filePath}"`,
     run: (filePath, inputFile) => `java -cp "${tempDir}" Main < "${inputFile}"`
   },
   javascript: {
+    boilerplate: '',
     compile: null,
     run: (filePath, inputFile) => `node "${filePath}" < "${inputFile}"`
   }
 };
 
-// Socket.IO events
 io.on('connection', (socket) => {
   console.log('A client connected');
 
@@ -60,7 +64,12 @@ io.on('connection', (socket) => {
     const filePath = path.join(tempDir, fileName);
     const inputFile = path.join(tempDir, 'input.txt');
 
-    fs.writeFileSync(filePath, code);
+    // Prepend boilerplate
+    const finalCode = langConfig.boilerplate + code;
+
+ 
+
+    fs.writeFileSync(filePath, finalCode);
     fs.writeFileSync(inputFile, input);
 
     const compileCommand = langConfig.compile ? langConfig.compile(filePath) : null;
@@ -76,7 +85,6 @@ io.on('connection', (socket) => {
         socket.emit('output', stdout);
       }
 
-      // Clean up temporary files with retries to handle EBUSY error
       cleanUpFilesWithRetries(filePath, inputFile, 5, 1000);
     });
   });

@@ -1,3 +1,11 @@
+// src/index.js or at the start of src/App.js
+window.addEventListener('error', (event) => {
+  if (event.message.includes('ResizeObserver loop')) {
+    event.stopImmediatePropagation();
+  }
+});
+
+
 // src/App.js
 import React, { useState, useEffect } from 'react';
 import io from 'socket.io-client';
