@@ -1,9 +1,4 @@
-// src/index.js or at the start of src/App.js
-window.addEventListener('error', (event) => {
-  if (event.message.includes('ResizeObserver loop')) {
-    event.stopImmediatePropagation();
-  }
-});
+
 
 
 // src/App.js
@@ -11,7 +6,7 @@ import React, { useState, useEffect } from 'react';
 import io from 'socket.io-client';
 import Editor from '@monaco-editor/react';
 
-const socket = io('https://compilers1.onrender.com')
+const socket = io('https://compilers1.onrender.com');
 
 const languageOptions = [
   { value: 'python', label: 'Python' },
@@ -145,5 +140,13 @@ const App = () => {
     </div>
   );
 };
+
+
+// src/index.js or at the start of src/App.js
+window.addEventListener('error', (event) => {
+  if (event.message.includes('ResizeObserver loop')) {
+    event.stopImmediatePropagation();
+  }
+});
 
 export default App;
