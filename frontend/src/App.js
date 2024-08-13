@@ -11,7 +11,7 @@ import React, { useState, useEffect } from 'react';
 import io from 'socket.io-client';
 import Editor from '@monaco-editor/react';
 
-const socket = io('http://localhost:5000'); 
+const socket = io('https://compilers1.onrender.com'); 
 
 const languageOptions = [
   { value: 'python', label: 'Python' },
