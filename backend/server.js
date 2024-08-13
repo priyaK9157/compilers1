@@ -67,6 +67,8 @@ io.on('connection', (socket) => {
     // Prepend boilerplate
     const finalCode = langConfig.boilerplate + code;
 
+    console.log("finalCode",finalCode)
+
  
 
     fs.writeFileSync(filePath, finalCode);
