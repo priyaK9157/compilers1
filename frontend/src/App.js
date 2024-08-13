@@ -33,7 +33,7 @@ const App = () => {
   const [selectedLanguage, setSelectedLanguage] = useState('python');
   const [code, setCode] = useState(defaultCodeSnippets['python']);
   const [input, setInput] = useState('');
-  const [result, setResult] = useState('');
+  const [result, setResult] = useState('')
 
   useEffect(() => {
     // Set up Socket.IO event listeners
