@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: your-service-name
+    name: compilers1
     env: docker
     dockerfilePath: Dockerfile
     envVars:
